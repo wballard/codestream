@@ -4,18 +4,25 @@
 CURL=curl --silent
 JSON=json
 
-.PHONY: repositories/groups
+.PHONY: repositories/orgs/.all
 
-all: repositories/groups
+all: repositories
 
-repositories:
-	if [ ! -d $@ ]; then mkdir -p $@; fi
-
-repositories/groups: repositories
-	$(CURL) --user $(USERNAME):$(PASSWORD) http://$(GITHUB)/api/v3/user/orgs \
+repositories: repositories/orgs/.all
+	touch repositories/.update
+	cat $< \
 	| $(JSON) render templates/slice_orgs.mustache \
-	> $@
-	#curl -i --user $(USERNAME):$(PASSWORD) http://$(GITHUB)/api/v3/orgs/Deploy/repos
-	#curl -i --user $(USERNAME):$(PASSWORD) http://$(GITHUB)/api/v3/repositories
+	| xargs -I _ $(MAKE) repositories/orgs/_/.all
 
+#Every org listed to a file
+repositories/orgs/.all: 
+	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
+	$(CURL) --user $(USERNAME):$(PASSWORD) http://$(GITHUB)/api/v3/user/orgs \
+	> $@
+
+#Every repository in the org
+repositories/orgs/%/.all: repositories/.update
+	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
+	$(CURL) --user $(USERNAME):$(PASSWORD) http://$(GITHUB)/api/v3/orgs/$*/repos \
+	> $@
 
