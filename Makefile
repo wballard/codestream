@@ -25,13 +25,13 @@ repositories: repositories/orgs/.all
 #Every org listed to a file
 repositories/orgs/.all: 
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-	$(CURL) --user $(USERNAME):$(PASSWORD) $(GITHUB_ROOT)/api/v3/user/orgs \
+	$(CURL) --user '$(USERNAME):$(PASSWORD)' $(GITHUB_ROOT)/api/v3/user/orgs \
 	> $@
 
 #Every repository in the org
 repositories/orgs/%/.all: repositories/.update
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-	$(CURL) --user $(USERNAME):$(PASSWORD) $(GITHUB_ROOT)/api/v3/orgs/$*/repos \
+	$(CURL) --user '$(USERNAME):$(PASSWORD)' $(GITHUB_ROOT)/api/v3/orgs/$*/repos \
 	> $@
 	#updated versionsions of every repository
 	cat $@ \
