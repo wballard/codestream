@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-SHA=$2
+
+REPO=$2
+SHA=$3
 EMAIL=`git --git-dir=$1 --no-pager show -s --pretty=format:"%aE" $SHA`
-NOTES=`git --git-dir=$1 --no-pager show -s --pretty=format:"%N" $SHA`
+NOTES=`git --git-dir=$1 --no-pager show -s --pretty=format:"%B" $SHA`
 DIFF=`git --git-dir=$1 --no-pager diff --unified --no-color $SHA^!`
 
 export EMAIL
 export NOTES
 export DIFF
+export REPO
+export SHA
+
+json render templates/commit.mustache | hipchat rooms message "Codestreams" $EMAIL

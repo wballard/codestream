@@ -58,13 +58,12 @@ checkpoint: repositories/.all
 	| xargs -I % $(MAKE) codestreams/%/checkpointdb
 
 #Make codestreams postings through to hipchat
-postings: codestreams/chatroom
+postings:
 
 codestreams/chatroom: always
 	hipchat rooms list "Codestreams" > $@
 	if [[ ! -s $@ ]]; then hipchat rooms create $(USERNAME) "Codestreams"; fi;
 	hipchat rooms list "Codestreams" > $@
-
 
 #Create the checkpointdb, recording all ids of all commits
 codestreams/%/checkpointdb: always
@@ -78,15 +77,11 @@ codestreams/owner_user_id:
 	| json pluck '.user.user_id' \
 	> $@
 
-codestreams/%/latest_changes: repositories/%.git.update
+codestreams/%/latest_changes: repositories/%.git.update codestreams/chatroom
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
 	git --git-dir=$(basename $<) rev-list --remotes --all \
 	| memories new $(dir $@)checkpointdb \
-	| xargs -I _ ./bin/commit_info.sh "$(basename $<)" _
-	#and now remember that we have everything
-	git --git-dir=$(basename $<) rev-list --remotes --all \
-	| memories new $(dir $@)checkpointdb \
-	| memories remember $(dir $@)checkpointdb 
+	| xargs -I _ ./bin/commit_info.sh "$(basename $<)" $* _
 
 codestreams/%/hipchat_room_id: codestreams/owner_user_id
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
