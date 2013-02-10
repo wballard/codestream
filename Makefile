@@ -7,26 +7,31 @@ GITHUB_ROOT=http://$(GITHUB)
 CLONE_ROOT=git://$(GITHUB)
 BARE_USERNAME=$(shell python -c "import os; print os.environ['USERNAME'].split('@')[0]")
 .SECONDARY:
-.PHONY: clean always
+.PHONY: clean always repositories catchup
 
 organization-name=$(shell python -c "print '$1'.strip().split('/')[0]")
 
-all: repositories/.all
-	cat $< \
-	| xargs -I % $(MAKE) codestreams/%/hipchat_postings
+#Dummy target, makes 'make' by itself do nothing
+all:
+	@echo
 
 # Cloning from Github #
 
+#get all the repositories for all orgs, clone them, and make sure they are
+#fully up to date
+repositories:
+	$(MAKE) --always-make repositories/.all
+	cat repositories/.all \
+	| xargs -I % $(MAKE) repositories/%.git.update
+
 #starter target, this make sure we have every repository for 
 #every org, mirrored to local disk so we can work on it with git commands
-	
-repositories/.all: always
+repositories/.all:
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
 	$(CURL) --user "$(BARE_USERNAME):$(PASSWORD)" $(GITHUB_ROOT)/api/v3/user/orgs \
 	| $(JSON) render templates/slice_orgs.mustache \
 	| xargs -I % sh -c '$(CURL) --user "$(BARE_USERNAME):$(PASSWORD)" $(GITHUB_ROOT)/api/v3/orgs/%/repos | $(JSON) render templates/slice_repos.mustache' \
 	| tee $@
-
 
 #Actual repositories, these have no dependencies, just a tmp swap in case
 #of network interruption. This uses git mirroring, no working directory, we'll
@@ -41,6 +46,19 @@ repositories/%.git.update: repositories/%.git
 	cd $(basename $@); git remote update
 
 # Latest code changes #
+
+#Catch up the latest without making any postings, this is useful the very first
+#time to avoid a huge firehose
+checkpoint: repositories/.all
+	cat $< \
+	| xargs -I % $(MAKE) codestreams/%/checkpointdb
+
+#Create the checkpointdb, recording all ids of all commits
+codestreams/%/checkpointdb: always
+	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
+	git --git-dir=repositories/$*.git rev-list --remotes --all \
+	| memories remember $@
+
 codestreams/owner_user_id:
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
 	$(CURL) "https://api.hipchat.com/v1/users/show?user_id=$(USERNAME)&auth_token=$(HIPCHAT_API_KEY)" \
@@ -51,7 +69,7 @@ codestreams/%/latest_changes: repositories/%.git.update
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
 	git --git-dir=$(basename $<) rev-list --remotes --all \
 	| memories new $(dir $@)checkpointdb \
-	| xargs -I _ ./commit_info.sh "$(basename $<)" _
+	| xargs -I _ ./bin/commit_info.sh "$(basename $<)" _
 	#and now remember that we have everything
 	git --git-dir=$(basename $<) rev-list --remotes --all \
 	| memories new $(dir $@)checkpointdb \
@@ -70,5 +88,4 @@ codestreams/%/hipchat_postings: codestreams/%/latest_changes
 
 
 clean:
-	find codestreams | grep hipchat_room_id$$ \
-	| xargs cat \
+	rm -rf codestreams
