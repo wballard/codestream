@@ -15,6 +15,10 @@ organization-name=$(shell python -c "print '$1'.strip().split('/')[0]")
 all:
 	@echo
 
+install:
+	pip install --requirement=pipfile
+	$(MAKE) repositories checkpoint
+
 # Cloning from Github #
 
 #get all the repositories for all orgs, clone them, and make sure they are
@@ -52,6 +56,15 @@ repositories/%.git.update: repositories/%.git
 checkpoint: repositories/.all
 	cat $< \
 	| xargs -I % $(MAKE) codestreams/%/checkpointdb
+
+#Make codestreams postings through to hipchat
+postings: codestreams/chatroom
+
+codestreams/chatroom: always
+	hipchat rooms list "Codestreams" > $@
+	if [[ ! -s $@ ]]; then hipchat rooms create $(USERNAME) "Codestreams"; fi;
+	hipchat rooms list "Codestreams" > $@
+
 
 #Create the checkpointdb, recording all ids of all commits
 codestreams/%/checkpointdb: always

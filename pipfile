@@ -1,0 +1,3 @@
+git+git://github.com/wballard/hipchatcli.git@master
+git+git://github.com/wballard/jsontools.git@master
+git+git://github.com/wballard/memories.git@master
