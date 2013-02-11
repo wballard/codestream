@@ -47,7 +47,7 @@ repositories/%.git:
 
 #Update a repository, this doesn't actually generate a file
 repositories/%.git.update: repositories/%.git
-	cd $(basename $@); git remote update
+	#git remote update --git-dir=repositories/$*.git
 
 # Latest code changes #
 
@@ -71,29 +71,20 @@ codestreams/%/checkpointdb: always
 	git --git-dir=repositories/$*.git rev-list --remotes --all \
 	| memories remember $@
 
-codestreams/owner_user_id:
+#using the checkpoint database, figure all commits that are new
+#then pipe them along for posting to hipchat
+#and remember that you sent them, so we don't double post
+codestreams/%/hipchat_postings: repositories/%.git.update codestreams/chatroom
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-	$(CURL) "https://api.hipchat.com/v1/users/show?user_id=$(USERNAME)&auth_token=$(HIPCHAT_API_KEY)" \
-	| json pluck '.user.user_id' \
-	> $@
-
-codestreams/%/latest_changes: repositories/%.git.update codestreams/chatroom
-	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-	git --git-dir=$(basename $<) rev-list --remotes --all \
-	| memories new $(dir $@)checkpointdb \
-	| xargs -I _ ./bin/commit_info.sh "$(basename $<)" $* _
-
-codestreams/%/hipchat_room_id: codestreams/owner_user_id
-	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-	$(CURL) --data "name=Codestream/$*&owner_user_id=$(shell cat codestreams/owner_user_id)" "https://api.hipchat.com/v1/rooms/create?auth_token=$(HIPCHAT_API_KEY)" \
-	| json pluck '.room.room_id' \
-	| tee $@.tmp
-	mv $@.tmp $@
-
-codestreams/%/hipchat_postings: codestreams/%/latest_changes 
-	$(MAKE) codestreams/$(call organization-name, $*)/hipchat_room_id
-	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-
+	git --git-dir=$(basename $<) rev-list --remotes --all --date-order --reverse \
+	| tail \
+	| memories new codestreams/$*/checkpointdb \
+	> $@.new
+	cat $@.new \
+	| xargs -I _ ./bin/post_commit_info.sh "$(basename $<)" $* _ \
+	> $@.posted
+	cat $@.posted \
+	| memories remember codestreams/$*/checkpointdb
 
 clean:
 	rm -rf codestreams
