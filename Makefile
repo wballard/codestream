@@ -8,6 +8,7 @@ CLONE_ROOT=git://$(GITHUB)
 BARE_USERNAME=$(shell python -c "import os; print os.environ['USERNAME'].split('@')[0]")
 .SECONDARY:
 .PHONY: clean always repositories catchup
+export GITHUB_ROOT
 
 organization-name=$(shell python -c "print '$1'.strip().split('/')[0]")
 
@@ -76,7 +77,7 @@ codestreams/%/checkpointdb: always
 #and remember that you sent them, so we don't double post
 codestreams/%/hipchat_postings: repositories/%.git.update codestreams/chatroom
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-	git --git-dir=$(basename $<) rev-list --remotes --all --date-order --reverse \
+	git --git-dir=$(basename $<) rev-list --remotes --all --date-order --reverse --no-merges \
 	| tail \
 	| memories new codestreams/$*/checkpointdb \
 	> $@.new
