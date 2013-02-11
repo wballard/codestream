@@ -7,7 +7,7 @@ GITHUB_ROOT=http://$(GITHUB)
 CLONE_ROOT=git://$(GITHUB)
 BARE_USERNAME=$(shell python -c "import os; print os.environ['USERNAME'].split('@')[0]")
 .SECONDARY:
-.PHONY: clean always repositories catchup
+.PHONY: clean always repositories catchup repositories/.all
 export GITHUB_ROOT
 
 organization-name=$(shell python -c "print '$1'.strip().split('/')[0]")
@@ -24,10 +24,7 @@ install:
 
 #get all the repositories for all orgs, clone them, and make sure they are
 #fully up to date
-repositories:
-	$(MAKE) --always-make repositories/.all
-	cat repositories/.all \
-	| xargs -I % $(MAKE) repositories/%.git.update
+repositories: repositories/.all
 
 #starter target, this make sure we have every repository for 
 #every org, mirrored to local disk so we can work on it with git commands
@@ -37,6 +34,8 @@ repositories/.all:
 	| $(JSON) render templates/slice_orgs.mustache \
 	| xargs -I % sh -c '$(CURL) --user "$(BARE_USERNAME):$(PASSWORD)" $(GITHUB_ROOT)/api/v3/orgs/%/repos | $(JSON) render templates/slice_repos.mustache' \
 	| tee $@
+	cat $@ \
+	| xargs -I % $(MAKE) repositories/%.git.update
 
 #Actual repositories, these have no dependencies, just a tmp swap in case
 #of network interruption. This uses git mirroring, no working directory, we'll
@@ -48,7 +47,7 @@ repositories/%.git:
 
 #Update a repository, this doesn't actually generate a file
 repositories/%.git.update: repositories/%.git
-	#git remote update --git-dir=repositories/$*.git
+	git --git-dir=repositories/$*.git remote update
 
 # Latest code changes #
 
@@ -59,9 +58,12 @@ checkpoint: repositories/.all
 	| xargs -I % $(MAKE) codestreams/%/checkpointdb
 
 #Make codestreams postings through to hipchat
-postings:
+hipchat_postings: repositories/.all
+	-rm codestreams/chatroom
+	cat $< \
+	| xargs -I % $(MAKE) codestreams/%/hipchat_postings
 
-codestreams/chatroom: always
+codestreams/chatroom:
 	hipchat rooms list "Codestreams" > $@
 	if [[ ! -s $@ ]]; then hipchat rooms create $(USERNAME) "Codestreams"; fi;
 	hipchat rooms list "Codestreams" > $@
