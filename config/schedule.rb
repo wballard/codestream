@@ -22,5 +22,5 @@
 job_type :in_directory, 'cd :path; :task'
 
 every 10.minutes do
-  in_directory "make hipchat_postings &> log"
+  in_directory "source ~/githubvars; make hipchat_postings &> log"
 end
