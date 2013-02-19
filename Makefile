@@ -30,12 +30,25 @@ repositories: repositories/.all
 #every org, mirrored to local disk so we can work on it with git commands
 repositories/.all:
 	if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
-	$(CURL) --user "$(BARE_USERNAME):$(PASSWORD)" $(GITHUB_ROOT)/api/v3/user/orgs \
+	$(CURL) --output - --user "$(BARE_USERNAME):$(PASSWORD)" $(GITHUB_ROOT)/api/v3/user/orgs \
+	> $@.raw
+	cat $@.raw \
 	| $(JSON) render templates/slice_orgs.mustache \
-	| xargs -I % sh -c '$(CURL) --user "$(BARE_USERNAME):$(PASSWORD)" $(GITHUB_ROOT)/api/v3/orgs/%/repos | $(JSON) render templates/slice_repos.mustache' \
-	| tee $@
+	| xargs -I % $(MAKE) repositories/%.repositories
+	ls repositories/*.repositories \
+	| xargs cat \
+	| sort \
+	| uniq \
+	> $@
 	cat $@ \
 	| xargs -I % $(MAKE) repositories/%.git.update
+
+repositories/%.repositories: always
+	$(CURL) --output - --user "$(BARE_USERNAME):$(PASSWORD)" $(GITHUB_ROOT)/api/v3/orgs/$*/repos \
+	> $@.raw
+	cat $@.raw \
+	| $(JSON) render templates/slice_repos.mustache \
+	> $@
 
 #Actual repositories, these have no dependencies, just a tmp swap in case
 #of network interruption. This uses git mirroring, no working directory, we'll
@@ -67,6 +80,18 @@ codestreams/chatroom:
 	hipchat rooms list "Codestreams" > $@
 	if [[ ! -s $@ ]]; then hipchat rooms create $(USERNAME) "Codestreams"; fi;
 	hipchat rooms list "Codestreams" > $@
+
+codestreams/chatrooms: repositories/.all
+	if [ ! -d $@ ]; then mkdir -p $@; fi
+	cat $< \
+  | python bin/slashsplit.py \
+	| uniq \
+	| xargs -I _ $(MAKE) codestreams/chatrooms/_
+
+codestreams/chatrooms/%:
+	hipchat rooms list "$*" > $@
+	if [[ ! -s $@ ]]; then hipchat rooms create $(USERNAME) "$*"; fi;
+	hipchat rooms list "$*" > $@
 
 #Create the checkpointdb, recording all ids of all commits
 codestreams/%/checkpointdb: always
